@@ -1,0 +1,20 @@
+# 形态 A · frp 隧道 —— VPS 侧（frps.toml，frp >= v0.52）
+#
+# 拓扑：VPS(frps) <==加密控制/数据连接==> 开发机(frpc 主动外连，可穿 NAT)
+# frpc 把开发机回环的 dsh Host(127.0.0.1:3080) 经隧道映射到 VPS 回环
+# 127.0.0.1:3080，网关 UPSTREAM 保持默认 http://127.0.0.1:3080 即可，
+# 网关/Host 两侧配置与形态 C 完全一致。
+
+# frps 控制面监听；防火墙仅放行 TCP 7000
+bindAddr = "0.0.0.0"
+bindPort = 7000
+
+# 代理端口只绑 VPS 回环：3080 绝不暴露公网（默认值与 bindAddr 相同，必须显式覆盖）
+proxyBindAddr = "127.0.0.1"
+
+# token 鉴权：与 frpc.toml 一致，用 `openssl rand -hex 16` 生成
+auth.method = "token"
+auth.token = "<与 frpc 共享的长随机 token>"
+
+# 强制 TLS 加密隧道（frpc 侧需 transport.tls.enable = true）
+transport.tls.force = true

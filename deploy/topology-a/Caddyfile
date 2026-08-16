@@ -1,0 +1,21 @@
+# 形态 A（公网 VPS 入口）入口：Caddy -> 网关 -> 隧道 -> 开发机 dsh Host
+#
+#   https://dsh.example.com  --reverse_proxy-->  127.0.0.1:3000（网关，同在 VPS）
+#
+# - 站点地址换成自有公网域名；DNS A/AAAA 记录指向 VPS。Caddy 自动经 ACME
+#   （HTTP-01 / TLS-ALPN-01）签发并续期证书，需 VPS 的 80/443 对公网可达
+#   （防火墙/安全组放行）。
+# - VPS 上以 root 或 CAP_NET_BIND_SERVICE 运行 Caddy（官方 systemd 单元即可），
+#   直接占用 443；HTTP->HTTPS 跳转保留（默认行为，占用 80）。
+# - WebSocket（/api/events.mux、/api/events.host）：reverse_proxy 自动透传
+#   Upgrade，无需额外配置。
+# - 网关与 dsh Host 均不暴露公网：网关只绑 127.0.0.1，dsh Host 在开发机回环，
+#   二者之间走 WireGuard/frp 隧道（样例见同目录 wireguard/ 与 frp/）。
+{
+	# 部署面不需要 admin API
+	admin off
+}
+
+dsh.example.com {
+	reverse_proxy 127.0.0.1:3000
+}

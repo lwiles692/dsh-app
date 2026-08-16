@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  dsh 网关注常进程（launchd 参考实现，macOS；形态 B 的网关与 Host 同机）
+
+  安装（用户级）：
+    cp com.dsh-app.dsh-gateway.plist ~/Library/LaunchAgents/
+    # 编辑 EnvironmentVariables 填入真实 AUTH_TOKEN，然后收紧权限（见下）
+    chmod 0600 ~/Library/LaunchAgents/com.dsh-app.dsh-gateway.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.dsh-app.dsh-gateway.plist
+
+  注意：launchd 没有 EnvironmentFile 机制，AUTH_TOKEN 只能写在本 plist 里，
+  务必 chmod 0600；更严格的做法是包一层从 Keychain 读 token 的启动脚本。
+  形态差异同样只改 EnvironmentVariables（UPSTREAM/HOST/PORT/AUTH_TOKEN/
+  AUTH_COOKIE_SECURE）。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.dsh-app.dsh-gateway</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/node</string>
+		<string>src/server.js</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/opt/dsh-app/gateway</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>UPSTREAM</key>
+		<string>http://127.0.0.1:3080</string>
+		<key>HOST</key>
+		<string>127.0.0.1</string>
+		<key>PORT</key>
+		<string>3000</string>
+		<key>AUTH_TOKEN</key>
+		<string>REPLACE_ME_openssl_rand_hex_16</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>2</integer>
+	<key>StandardOutPath</key>
+	<string>/tmp/dsh-gateway.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/dsh-gateway.err.log</string>
+</dict>
+</plist>

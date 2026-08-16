@@ -1,0 +1,15 @@
+# 形态 A · WireGuard 隧道 —— 开发机侧（/etc/wireguard/wg0.conf）
+#
+# 与 wg0.vps.conf.sample 配对使用。开发机通常在内网/NAT 后，由它主动
+# 向 VPS 发起隧道（Endpoint 指向 VPS），PersistentKeepalive 保活 NAT 映射。
+
+[Interface]
+Address = 10.9.0.2/24
+PrivateKey = <开发机私钥>
+
+[Peer]
+# VPS
+PublicKey = <VPS 公钥>
+AllowedIPs = 10.9.0.1/32
+Endpoint = <VPS 公网 IP>:51820
+PersistentKeepalive = 25

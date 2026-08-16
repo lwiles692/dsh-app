@@ -1,0 +1,20 @@
+# 形态 A · frp 隧道 —— 开发机侧（frpc.toml，frp >= v0.52）
+#
+# 与 frps.toml.sample 配对。frpc 主动外连 VPS:7000，无需开发机有公网 IP。
+# 数据面：VPS 127.0.0.1:3080 -> 隧道 -> 开发机 127.0.0.1:3080（dsh Host）。
+# dsh Host 看到的连接来自本机回环（frpc 本地转发），回环信任栅栏天然满足。
+
+serverAddr = "<VPS 公网 IP>"
+serverPort = 7000
+
+auth.method = "token"
+auth.token = "<与 frps 共享的长随机 token>"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "dsh-host"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3080
+remotePort = 3080

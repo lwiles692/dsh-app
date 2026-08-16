@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  dsh Host 常驻进程（launchd 参考实现，macOS 开发机；形态 B 或形态 A 的开发机侧）
+
+  安装（用户级，登录即启动，无需 root——dsh Host 只绑 127.0.0.1）：
+    cp com.dsh-app.dsh-host.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.dsh-app.dsh-host.plist
+
+  WorkingDirectory 按仓库实际路径修改；日志在 /tmp/dsh-host.{out,err}.log。
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.dsh-app.dsh-host</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/node</string>
+		<string>apps/cli/lib/bin.js</string>
+		<string>web</string>
+		<string>--port</string>
+		<string>3080</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/opt/dsh-app/vendor/deepseek-harness</string>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>2</integer>
+	<key>StandardOutPath</key>
+	<string>/tmp/dsh-host.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/dsh-host.err.log</string>
+</dict>
+</plist>

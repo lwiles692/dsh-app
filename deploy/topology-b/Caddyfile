@@ -1,0 +1,35 @@
+# 形态 B（单机内网 + 自有域名）入口：Caddy -> 网关 -> dsh Host，三者同机
+#
+#   https://dsh.home.example.com  --reverse_proxy-->  127.0.0.1:3000（网关）
+#
+# - 站点地址换成自有域名；DNS A 记录指向开发机内网 IP（如 192.168.1.10）。
+#   域名解析记录可以是私网地址——配合 DNS-01 验证，证书签发不依赖公网可达。
+# - 证书二选一（下方 tls 块二选一，默认 DNS-01）：
+#   1. DNS-01（默认）：需要带 DNS 插件的 Caddy 构建（如 cloudflare 插件，
+#      `xcaddy build --with github.com/caddy-dns/cloudflare`），API token 走
+#      环境变量注入。优点：公开可信证书，局域网内任何客户端免配信任。
+#   2. tls internal（备选）：Caddy 本地 CA 签发，无需插件与公网；代价是每台
+#      客户端要信任 Caddy 根证书（同形态 C「浏览器信任」步骤）。
+# - 网关与 dsh Host 只绑 127.0.0.1；仅 Caddy 监听局域网地址。443 需 root 或
+#   CAP_NET_BIND_SERVICE；非 root 运行时把站点地址改为
+#   `dsh.home.example.com:8443`（此时 HTTP->HTTPS 跳转会绑 80 失败，需加
+#   全局 `auto_https disable_redirects`，参考 deploy/Caddyfile 形态 C）。
+# - WebSocket（/api/events.mux、/api/events.host）：reverse_proxy 自动透传。
+{
+	# 部署面不需要 admin API
+	admin off
+}
+
+dsh.home.example.com {
+	# 选项 1：DNS-01 签证书（默认；需 DNS 插件构建的 Caddy）
+	# API token 由进程环境注入（systemd EnvironmentFile / launchd
+	# EnvironmentVariables / 导出后 caddy run），不写进本文件。
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	# 选项 2：内网 CA（备选；注释掉上面的 tls 块后启用）
+	# tls internal
+
+	reverse_proxy 127.0.0.1:3000
+}

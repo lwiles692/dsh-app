@@ -1,0 +1,27 @@
+# dsh Host 常驻进程（systemd 系统单元参考实现，三种形态通用）
+#
+# 安装：
+#   sudo cp dsh-host.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now dsh-host
+#
+# 前提：仓库部署在 /opt/dsh-app（ WorkingDirectory 按实际路径修改），
+# vendor/deepseek-harness 已构建（pnpm install && pnpm run build）。
+# 形态 A 中本单元跑在开发机；形态 B/C 中与其他单元同机。
+[Unit]
+Description=dsh Host (deepseek-harness web, upstream of dsh gateway)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 以专用用户运行更稳妥：User=dsh
+WorkingDirectory=/opt/dsh-app/vendor/deepseek-harness
+ExecStart=/usr/bin/node apps/cli/lib/bin.js web --port 3080
+Restart=on-failure
+RestartSec=2
+# 基本加固：dsh Host 只绑 127.0.0.1，无需特权与可写系统目录
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

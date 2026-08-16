@@ -1,0 +1,33 @@
+# dsh 网关注常进程（systemd 系统单元参考实现，三种形态通用）
+#
+# 安装：
+#   sudo install -m 0600 /dev/null /etc/dsh/gateway.env
+#     # 写入 AUTH_TOKEN=<openssl rand -hex 16>；形态 A/B 如需覆盖 UPSTREAM 等也写这里
+#   sudo cp dsh-gateway.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now dsh-gateway
+#
+# 形态差异全部走 /etc/dsh/gateway.env（UPSTREAM/HOST/PORT/AUTH_TOKEN/
+# AUTH_COOKIE_SECURE），单元本身不改；网关环境变量语义见 deploy/RUNBOOK.md。
+[Unit]
+Description=dsh gateway (auth + reverse proxy for dsh Host)
+After=network-online.target
+Wants=network-online.target
+# 与 dsh Host 同机时（形态 B/C）建议再加：After=dsh-host.service
+
+[Service]
+Type=simple
+# 以专用用户运行更稳妥：User=dsh
+WorkingDirectory=/opt/dsh-app/gateway
+Environment=UPSTREAM=http://127.0.0.1:3080
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+# AUTH_TOKEN 等秘密走 EnvironmentFile（0600 root），不落单元文件
+EnvironmentFile=-/etc/dsh/gateway.env
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
