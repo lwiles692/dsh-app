@@ -1,5 +1,5 @@
 // dsh 多客户端网关（issue 02：骨架 + HTTP 反代；issue 03：事件流 WS 透传；
-// issue 04：认证面——登录页 + cookie 中间件）
+// issue 04：认证面——登录页 + cookie 中间件；issue 11：移动布局补丁注入）
 //
 // 把上游 dsh Host 的 SPA 静态文件与 /api 一元 POST 全量反向代理到 UPSTREAM，
 // 并透传 /api/events.mux 与 /api/events.host 两条纯下行 WebSocket（上游 web 面
@@ -16,6 +16,8 @@ import websocket from '@fastify/websocket'
 import WebSocket from 'ws'
 import { Transform } from 'node:stream'
 import { createHash, timingSafeEqual } from 'node:crypto'
+import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib'
+import { patchHtml } from './mobile-patch.js'
 
 const UPSTREAM = process.env.UPSTREAM ?? 'http://127.0.0.1:3080'
 const HOST = process.env.HOST ?? '127.0.0.1'
@@ -38,6 +40,13 @@ const COOKIE_SECURE = !(secureRaw === 'false' || secureRaw === '0' || secureRaw 
 // 登录端点限流：每 IP 每窗口最多尝试次数（成功/失败都计，成功即清零）
 const LOGIN_RATE_MAX = 10
 const LOGIN_RATE_WINDOW_MS = 60_000
+
+// --- issue 11：移动布局补丁注入 ----------------------------------------------
+// MOBILE_CSS_PATCH：网关注入移动布局补丁开关，默认开（补丁全部规则包在
+// @media (max-width: 768px) 内，桌面宽屏不命中，默认开不影响桌面；移动端
+// 经网关即生效，无需壳配合）。显式 false/0/no 关闭，关闭时 HTML 原样透传。
+const patchRaw = (process.env.MOBILE_CSS_PATCH ?? 'true').trim().toLowerCase()
+const MOBILE_PATCH = !(patchRaw === 'false' || patchRaw === '0' || patchRaw === 'no')
 
 const tooLargePayload = () => ({
   statusCode: 413,
@@ -273,7 +282,70 @@ await app.register(httpProxy, {
   replyOptions: {
     // 注意：rewriteRequestHeaders 必须放在 replyOptions 下——@fastify/http-proxy v11
     // 只把 replyOptions 透传给逐请求的 reply.from()，顶层同名选项对 HTTP 路径不生效。
-    rewriteRequestHeaders: (_req, headers) => rewriteHeaders(headers),
+    rewriteRequestHeaders: (req, headers) => {
+      const out = rewriteHeaders(headers)
+      // issue 11：文档请求（Accept 含 text/html，即导航/整页加载）要求上游
+      // 回未压缩的 200 全量正文，注入路径才能改写：剥 accept-encoding 与
+      // 条件请求头（上游 304 无正文可注入）。只影响 HTML 文档请求，JS/CSS
+      // 等静态资源（Accept 不含 text/html）保持原有压缩与缓存行为。
+      if (MOBILE_PATCH && typeof req.headers.accept === 'string' && req.headers.accept.includes('text/html')) {
+        delete out['accept-encoding']
+        delete out['if-none-match']
+        delete out['if-modified-since']
+      }
+      return out
+    },
+    // issue 11：注入移动布局补丁。reply-from 在调用本回调前已把上游状态码与
+    // 响应头复制到 reply（见其 index.js onResponse 约定），非补丁路径只需
+    // reply.send(res.stream)，与默认行为一致。
+    onResponse: (req, reply, res) => {
+      const contentType = String(res.headers['content-type'] ?? '')
+      if (!MOBILE_PATCH || res.statusCode !== 200 || !contentType.includes('text/html')) {
+        reply.send(res.stream)
+        return
+      }
+      // 补丁路径：HTML 文档很小（SPA 壳 ~12KB），收全量后改写。
+      const chunks = []
+      res.stream.on('data', (chunk) => chunks.push(chunk))
+      res.stream.on('error', (err) => {
+        // 响应头尚未发出（send 前不写头）：剥掉正文相关的头后以 502 收尾，
+        // 客户端拿到明确错误而不是连接重置。
+        req.log.warn({ err: err.message }, '移动补丁：上游 HTML 流读取失败')
+        reply.removeHeader('content-encoding')
+        reply.removeHeader('content-length')
+        reply.code(502).type('text/plain; charset=utf-8').send('gateway: upstream html stream error')
+      })
+      res.stream.on('end', () => {
+        const raw = Buffer.concat(chunks)
+        // 非 UTF-8 文档改写会破坏编码：透传不注入。
+        const charset = /charset=([\w-]+)/i.exec(contentType)?.[1]
+        if (charset !== undefined && !/^utf-?8$/i.test(charset)) {
+          req.log.warn({ charset }, '移动补丁：HTML 非 UTF-8，原样透传')
+          reply.send(raw)
+          return
+        }
+        // 防御：文档请求已剥 accept-encoding，正常为 identity；上游仍压缩时解压再改写。
+        let buf = raw
+        const enc = String(res.headers['content-encoding'] ?? '').trim().toLowerCase()
+        try {
+          if (enc === 'gzip') buf = gunzipSync(buf)
+          else if (enc === 'br') buf = brotliDecompressSync(buf)
+          else if (enc === 'deflate') buf = inflateSync(buf)
+          else if (enc !== '' && enc !== 'identity') throw new Error(`unknown content-encoding: ${enc}`)
+        } catch (err) {
+          // 解压失败则原始字节透传（原 content-encoding/content-length 仍匹配），不注入
+          req.log.warn({ err: err.message }, '移动补丁：HTML 解压失败，原样透传')
+          reply.send(raw)
+          return
+        }
+        reply.removeHeader('content-encoding')
+        reply.removeHeader('content-length')
+        // 正文已改写，原校验器失效：避免客户端攒下错误 etag/last-modified
+        reply.removeHeader('etag')
+        reply.removeHeader('last-modified')
+        reply.send(patchHtml(buf.toString('utf8')))
+      })
+    },
     onError: (reply, { error }) => {
       if (typeof error?.message === 'string' && error.message.includes(BODY_TOO_LARGE_MARK)) {
         reply.header('connection', 'close').code(413).send(tooLargePayload())
