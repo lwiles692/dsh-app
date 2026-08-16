@@ -1,0 +1,21 @@
+{
+  "name": "dsh-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "dsh multi-client gateway: reverse proxy for upstream dsh Host (SPA + /api unary POST)",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "@fastify/http-proxy": "^11.6.0",
+    "fastify": "^5.12.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.6.0",
+      "onFail": "download"
+    }
+  }
+}
