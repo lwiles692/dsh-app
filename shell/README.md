@@ -1,9 +1,13 @@
-# dsh-shell — Tauri 2 桌面壳（issue 07 MVP）
+# dsh-shell — Tauri 2 桌面壳（issue 07 MVP + 08 桌面体验项）
 
 薄壳：窗口直接加载网关 URL，不打包业务静态资源。首次启动展示本地配置页，
 保存服务器地址（`tauri-plugin-store` 持久化到 `settings.json`）后导航到网关；
 登录在 webview 内完成，token 经网关登录页以 `HttpOnly; Secure; SameSite=Lax`
 cookie 持久化——壳不保存 token，不引入 keyring/stronghold。
+
+桌面体验项（issue 08）：系统托盘（显示/隐藏窗口、开机自启与关窗驻留开关、退出）、
+单实例（重复启动聚焦已有窗口，不新开进程）、关窗默认驻留托盘（托盘可关，
+关闭后关窗即退出进程）。开机自启首次启动默认开启，托盘勾选关闭后不再覆盖。
 
 ## 结构
 

@@ -1,15 +1,19 @@
 // 全局 Tauri API（withGlobalTauri）在远程网关页面不可用 —— IPC 只对本地配置页开放，
 // 壳内 SPA 走标准 fetch/WebSocket + HttpOnly cookie，与浏览器形态完全一致。
 
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::{
-    menu::{MenuBuilder, MenuItemBuilder},
-    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_store::StoreExt;
 
 const STORE_PATH: &str = "settings.json";
 const SERVER_URL_KEY: &str = "server_url";
+const CLOSE_TO_TRAY_KEY: &str = "close_to_tray";
+const AUTOSTART_INIT_KEY: &str = "autostart_initialized";
 
 /// 启动配置页读取已保存的网关地址（用于预填表单）。
 #[tauri::command]
@@ -50,6 +54,41 @@ fn validate_server_url(input: &str) -> Result<url::Url, String> {
     }
 }
 
+/// 「关窗驻留托盘」配置：store 未写入时默认开启；显式 false 时关窗即退出进程。
+fn close_to_tray_from(value: Option<&Value>) -> bool {
+    value.and_then(Value::as_bool).unwrap_or(true)
+}
+
+fn close_to_tray_enabled(app: &AppHandle) -> bool {
+    let value = app
+        .store(STORE_PATH)
+        .ok()
+        .and_then(|s| s.get(CLOSE_TO_TRAY_KEY));
+    close_to_tray_from(value.as_ref())
+}
+
+/// 显示/隐藏主窗口（托盘左键与托盘菜单共用）。
+fn toggle_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_visible().unwrap_or(false) {
+            let _ = window.hide();
+        } else {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+}
+
+/// 聚焦已有主窗口（单实例插件回调：重复启动时不新开进程，只唤起窗口）。
+fn focus_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn open_main_window(app: &AppHandle, url: WebviewUrl) -> tauri::Result<()> {
     WebviewWindowBuilder::new(app, "main", url)
         .title("dsh")
@@ -61,7 +100,15 @@ fn open_main_window(app: &AppHandle, url: WebviewUrl) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 单实例必须最先注册：第二个进程在此即退出，回调聚焦已有窗口。
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            focus_main_window(app);
+        }))
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(tauri::generate_handler![get_server_url, set_server_url])
         .setup(|app| {
             // 原生菜单提供「更改服务器地址」入口：回到本地配置页后可改指向另一实例。
@@ -69,6 +116,65 @@ pub fn run() {
                 MenuItemBuilder::with_id("change-server", "更改服务器地址").build(app)?;
             let menu = MenuBuilder::new(app).item(&change_server).build()?;
             app.set_menu(menu)?;
+
+            // 首次启动默认开启开机自启；写入标记，之后不覆盖用户在托盘的勾选。
+            let store = app.store(STORE_PATH)?;
+            if store.get(AUTOSTART_INIT_KEY).is_none() {
+                let _ = app.autolaunch().enable();
+                store.set(AUTOSTART_INIT_KEY, json!(true));
+                let _ = store.save();
+            }
+
+            // 系统托盘：显示/隐藏窗口、开机自启、关窗驻留开关、退出。
+            let toggle = MenuItemBuilder::with_id("toggle-window", "显示/隐藏窗口").build(app)?;
+            let autostart_item = CheckMenuItemBuilder::with_id("autostart", "开机自启")
+                .checked(app.autolaunch().is_enabled().unwrap_or(false))
+                .build(app)?;
+            let close_to_tray_item =
+                CheckMenuItemBuilder::with_id("close-to-tray", "关窗时驻留托盘")
+                    .checked(close_to_tray_enabled(app.handle()))
+                    .build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let tray_menu = MenuBuilder::new(app)
+                .items(&[&toggle, &autostart_item, &close_to_tray_item, &quit])
+                .build()?;
+            let mut tray = TrayIconBuilder::with_id("tray")
+                .menu(&tray_menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "toggle-window" => toggle_main_window(app),
+                    "autostart" => {
+                        let autostart = app.autolaunch();
+                        if autostart.is_enabled().unwrap_or(false) {
+                            let _ = autostart.disable();
+                        } else {
+                            let _ = autostart.enable();
+                        }
+                    }
+                    "close-to-tray" => {
+                        if let Ok(store) = app.store(STORE_PATH) {
+                            store.set(CLOSE_TO_TRAY_KEY, json!(!close_to_tray_enabled(app)));
+                            let _ = store.save();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // 左键点击托盘图标 = 显示/隐藏窗口（菜单走右键）。
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        toggle_main_window(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
 
             // 已配置地址 → 窗口直接加载网关 URL；否则加载本地启动配置页。
             let saved = app
@@ -87,9 +193,19 @@ pub fn run() {
         .on_menu_event(|app, event| {
             if event.id() == "change-server" {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.close();
+                    // destroy 绕过关窗驻留拦截（CloseRequested），直接销毁重建。
+                    let _ = window.destroy();
                 }
                 let _ = open_main_window(app, WebviewUrl::App("index.html".into()));
+            }
+        })
+        .on_window_event(|window, event| {
+            // 关窗不退进程（默认开）：拦截关闭改为隐藏，进程驻留托盘；托盘「退出」才退出。
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if close_to_tray_enabled(&window.app_handle()) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .run(tauri::generate_context!())
@@ -119,5 +235,17 @@ mod tests {
         assert!(validate_server_url("not a url").is_err());
         assert!(validate_server_url("file:///etc/passwd").is_err());
         assert!(validate_server_url("").is_err());
+    }
+
+    #[test]
+    fn close_to_tray_defaults_to_enabled() {
+        assert!(close_to_tray_from(None));
+        assert!(close_to_tray_from(Some(&json!("not-a-bool"))));
+    }
+
+    #[test]
+    fn close_to_tray_honors_explicit_value() {
+        assert!(close_to_tray_from(Some(&json!(true))));
+        assert!(!close_to_tray_from(Some(&json!(false))));
     }
 }
