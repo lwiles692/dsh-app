@@ -1,6 +1,7 @@
-# Tauri / Rust 构建产物
+# Tauri / Rust 构建产物（gen/ 下仅 schemas 是生成物；gen/android、gen/apple
+# 是入库的移动端工程——MainActivity 补丁等手改内容在 init 产物里，见 issue 12）
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/schemas/
 
 # Node
 node_modules/

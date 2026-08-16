@@ -1,4 +1,4 @@
-# dsh-shell — Tauri 2 桌面壳（issue 07 MVP + 08 桌面体验项 + 09 出包/更新）
+# dsh-shell — Tauri 2 桌面壳（issue 07 MVP + 08 桌面体验项 + 09 出包/更新 + 12 移动端）
 
 薄壳：窗口直接加载网关 URL，不打包业务静态资源。首次启动展示本地配置页，
 保存服务器地址（`tauri-plugin-store` 持久化到 `settings.json`）后导航到网关；
@@ -25,10 +25,81 @@ Windows 走 msi passive 安装器自行退出应用。
     `get_server_url` / `set_server_url` command、原生菜单「更改服务器地址」
     （回配置页改指向另一实例）、URL 校验（https 任意；http 仅回环，对应 RUNBOOK 降配形态）。
   - `src/updater.rs` — 更新检查/确认/下载/安装（issue 09，Rust 侧触发）。
-  - `capabilities/default.json` — `core:default` + `updater:default`（权限仅对本地
-    页面生效；实际更新流程不经 JS API，权限为本地页直连预留）。
+  - `capabilities/default.json` — 桌面能力：`core:default` + `updater:default`
+    （权限仅对本地页面生效；实际更新流程不经 JS API，权限为本地页直连预留）。
+  - `capabilities/mobile.json` — 移动端能力：仅 `core:default`（issue 12）。
   - `tauri.conf.json` — `frontendDist: ../src`，窗口在代码中创建；
     `plugins.updater` 为占位配置（见下「自动更新占位」）。
+  - `gen/android/` — Tauri Android 工程（issue 12，`tauri android init` 产物，
+    **入库**：MainActivity 补丁等手改内容在 init 产物里，重新 init 不会保留）。
+
+## 移动端（issue 12）
+
+同一 `shell/` 工程开 Android target。桌面专属能力按平台门控（`#[cfg(desktop)]` +
+Cargo.toml 按 target 门控依赖）：托盘/原生菜单（tray-icon crate 与 muda 无 Android
+实现）、single-instance、autostart、updater（插件移动端官方支持 none）；移动端保留
+启动配置页、网关加载、store 持久化、dialog。
+
+原生补丁（`gen/android/app/src/main/java/.../MainActivity.kt`，来源 issue 10 spike）：
+
+1. **safe-area 桥（S1）**：Android WebView < 140 的 `env(safe-area-inset-*)` 恒为 0
+   （tauri#14240），原生读 systemBars + displayCutout，经 `evaluateJavascript` 写
+   `--dsh-safe-{top,right,bottom,left}` CSS 变量；网关移动 CSS 补丁（issue 11）以
+   `max(env(...), var(--dsh-safe-*))` 回退链消费。走 evaluateJavascript 而非插件
+   JS API——主窗口是远程页，IPC 不对其开放。
+2. **键盘 inset（K1/K2）**：manifest `android:windowSoftInputMode="adjustResize"`
+   + MainActivity 把 IME inset 设为 WebView 底部 padding（edge-to-edge 下
+   adjustResize 单独不生效，tauri#7868）；与网关补丁的
+   `interactive-widget=resizes-content`（K3）配合。
+
+### 构建 debug APK（Linux）
+
+前置（用户级工具链，无需 sudo；本仓库验证时的路径供参考）：
+
+```sh
+# JDK 17（temurin tarball 解压）+ Android SDK（cmdline-tools + sdkmanager）
+export JAVA_HOME=~/.local/opt/jdk-17
+export ANDROID_HOME=~/.local/opt/android-sdk
+export NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018
+export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
+# rust android target（首次）
+rustup target add aarch64-linux-android
+# SDK 组件（platform-tools / platforms / build-tools / ndk）
+sdkmanager --install "platform-tools" "platforms;android-36" \
+  "build-tools;34.0.0" "ndk;27.2.12479018"
+```
+
+模板要求 compileSdk 36 / targetSdk 36 / minSdk 24（缺失时 gradle 会自动补装）。
+构建与校验：
+
+```sh
+pnpm exec tauri android build --debug --apk --target aarch64
+# 产物：src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+# 完整性校验（无真机时替代「可安装」验收）：
+$ANDROID_HOME/build-tools/34.0.0/aapt dump badging <apk> | head
+```
+
+真机部署：`adb install -r <apk>`，首次启动在配置页填网关入口（形态 B
+`https://dsh.home.example.com:8443` 或 DNS-01 域名），登录即建立 cookie 会话。
+
+### iOS（工程配置待生成，出包需 macOS）
+
+`tauri ios init` 在 Linux 上**不可用**：CLI 的 `Ios` 子命令为
+`#[cfg(target_os = "macos")]`（tauri-cli `src/lib.rs`），且工程生成硬依赖 XcodeGen
+（`xcodegen generate`，仅 macOS）。因此 `gen/apple/` 尚未生成，macOS 上的步骤：
+
+```sh
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+pnpm exec tauri ios init          # 生成 gen/apple/ Xcode 工程
+pnpm exec tauri ios build         # 需 Xcode + Apple 开发者证书/签名
+```
+
+签名配置：`tauri.conf.json` `bundle.ios`（或 `TAURI_APPLE_DEVELOPMENT_TEAM` 等
+环境变量，见 Tauri 文档 iOS 签名节）。iOS 侧同样需要 safe-area/键盘适配
+（Android 的 MainActivity 桥为 Kotlin 实现，iOS 对应处在
+`gen/apple/` 生成后的 Swift 侧，届时参照同一 spike 结论落地）。
+
+
 
 ## CI 出包（issue 09）
 

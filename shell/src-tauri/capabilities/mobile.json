@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "移动端主窗口能力（issue 12）：core 默认集即可——本地启动配置页只调壳自有 command（get/set_server_url，不经 ACL），远程网关页无 IPC（issue 07 约定）。updater/dialog 插件权限不声明：updater 移动端未编入，dialog 的更新确认流程为桌面专属。",
+  "platforms": ["android", "iOS"],
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
