@@ -4,3 +4,8 @@ vendor/
 
 node_modules/
 dist/
+
+# issue 05 验收临时产物：Caddy 静态二进制与本地 CA（不入库，见 deploy/RUNBOOK.md）
+.scratch/bin/
+.scratch/caddy-data/
+.scratch/caddy-config/
