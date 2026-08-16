@@ -6,7 +6,7 @@
 #   - Windows: msi（x64）
 #   - Android: arm64-v8a debug APK（JDK 17 + Android SDK/NDK，见 build-android job；
 #              iOS 不在此列——gen/apple 未生成且 init 需 macOS + XcodeGen，
-#              见 shell/README.md「iOS」节）
+#              见 app/README.md「iOS」节）
 #
 # 触发：push tag v*（产物附到 draft release）；workflow_dispatch 手动出包（产物上传
 # workflow artifacts，不建 release）。
@@ -15,7 +15,7 @@
 # 未签名 msi / Linux 无签名要求 / Android 用 debug 签名）。真实密钥就绪后在
 # macOS/Windows job 注入签名环境变量（见下方「签名占位」注释），Android 切 release
 # 出包并配 keystore（见 build-android 的「签名占位」注释），并开启 tauri.conf.json
-# 的 updater 产物（createUpdaterArtifacts，见 shell/README.md「自动更新」）。
+# 的 updater 产物（createUpdaterArtifacts，见 app/README.md「自动更新」）。
 
 name: apps-release
 
@@ -55,7 +55,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: shell/pnpm-lock.yaml
+          cache-dependency-path: app/pnpm-lock.yaml
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -63,7 +63,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: shell/src-tauri
+          workspaces: app/src-tauri
 
       # Tauri 2 官方 Linux 依赖（WebKitGTK 4.1 + 托盘 appindicator + librsvg）
       - name: Install Linux build deps
@@ -76,7 +76,7 @@ jobs:
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
-        working-directory: shell
+        working-directory: app
 
       # 签名占位：无真实密钥，当前产出未签名构建。启用签名时在对应平台解注释并
       # 配置 repo secrets（变量名即 Tauri 官方约定，见 tauri.app 签名文档）：
@@ -85,19 +85,19 @@ jobs:
       #   Windows: WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD（无则跳过签名）
       - name: Build bundles
         run: pnpm exec tauri build ${{ matrix.args }}
-        working-directory: shell
+        working-directory: app
 
       # host 构建产物在 target/release/bundle，--target 交叉/通用构建在
       # target/<target>/release/bundle，统一用 ** 覆盖两种路径。
       - uses: actions/upload-artifact@v4
         with:
-          name: dsh-shell-${{ matrix.os }}
+          name: dsh-app-${{ matrix.os }}
           if-no-files-found: error
           path: |
-            shell/src-tauri/target/**/bundle/**/*.AppImage
-            shell/src-tauri/target/**/bundle/**/*.deb
-            shell/src-tauri/target/**/bundle/**/*.dmg
-            shell/src-tauri/target/**/bundle/**/*.msi
+            app/src-tauri/target/**/bundle/**/*.AppImage
+            app/src-tauri/target/**/bundle/**/*.deb
+            app/src-tauri/target/**/bundle/**/*.dmg
+            app/src-tauri/target/**/bundle/**/*.msi
 
       # 仅 tag 构建：产物附到 draft release，人工核对后发布
       - name: Attach bundles to draft release
@@ -108,13 +108,13 @@ jobs:
         with:
           draft: true
           files: |
-            shell/src-tauri/target/**/bundle/**/*.AppImage
-            shell/src-tauri/target/**/bundle/**/*.deb
-            shell/src-tauri/target/**/bundle/**/*.dmg
-            shell/src-tauri/target/**/bundle/**/*.msi
+            app/src-tauri/target/**/bundle/**/*.AppImage
+            app/src-tauri/target/**/bundle/**/*.deb
+            app/src-tauri/target/**/bundle/**/*.dmg
+            app/src-tauri/target/**/bundle/**/*.msi
 
   # Android APK（issue 12）：gen/android 工程入库（含 MainActivity 补丁），交叉编译
-  # aarch64 Rust + gradle 打包。SDK 组件版本与 shell/README.md「构建 debug APK」一致。
+  # aarch64 Rust + gradle 打包。SDK 组件版本与 app/README.md「构建 debug APK」一致。
   build-android:
     runs-on: ubuntu-22.04
     steps:
@@ -128,7 +128,7 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: shell/pnpm-lock.yaml
+          cache-dependency-path: app/pnpm-lock.yaml
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -136,7 +136,7 @@ jobs:
 
       - uses: swatinem/rust-cache@v2
         with:
-          workspaces: shell/src-tauri
+          workspaces: app/src-tauri
 
       - uses: actions/setup-java@v4
         with:
@@ -157,7 +157,7 @@ jobs:
 
       - name: Install JS deps
         run: pnpm install --frozen-lockfile
-        working-directory: shell
+        working-directory: app
 
       # 签名占位：暂无 release keystore，出 debug APK（gradle 自动生成 debug 签名，
       # 可直接 adb install）。切 release 出包时：
@@ -166,15 +166,15 @@ jobs:
       # CI secrets 后 base64 解码注入（见 tauri.app Android 签名文档）。
       - name: Build APK
         run: pnpm exec tauri android build --debug --apk --target aarch64
-        working-directory: shell
+        working-directory: app
 
       # --target aarch64 时产物在 apk/aarch64/debug/，本地无 --target 时在
       # apk/universal/debug/（issue 12 实测），统一用 ** 覆盖。
       - uses: actions/upload-artifact@v4
         with:
-          name: dsh-shell-android
+          name: dsh-app-android
           if-no-files-found: error
-          path: shell/src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
+          path: app/src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
 
       - name: Attach APK to draft release
         if: startsWith(github.ref, 'refs/tags/')
@@ -183,4 +183,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           draft: true
-          files: shell/src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
+          files: app/src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk

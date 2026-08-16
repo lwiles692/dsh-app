@@ -56,7 +56,7 @@ TLS 与 cookie 的联动：cookie 的 `Secure` 标志由网关按配置开关，
 ```
 dsh-app/
 ├── gateway/        # Node + fastify 网关：认证、Host/Origin 改写、WS 代理、登录页
-├── shell/          # Tauri 2 工程：一套代码出 Win/macOS/Linux + iOS/Android
+├── app/          # Tauri 2 工程：一套代码出 Win/macOS/Linux + iOS/Android
 ├── deploy/         # 部署 runbook（进程清单/环境变量/启动顺序）+ Caddyfile、隧道配置样例；
 │                   #   进程托管参考实现按需给：systemd 单元 / launchd plist / pm2 配置
 ├── scripts/        # verify-upstream.sh：上游协议/栅栏行为回归验证（升级必跑）
@@ -92,7 +92,7 @@ dsh-app/
 3. 验收：浏览器经 `https://<域名>` 完整走通"登录 → 建 workspace → 开会话 → 跑一条 agent 消息"（流式事件正常下行）；无 cookie 一律 401；特权方法（如 `settings.describe`）远程可调用。
 
 **Phase 2 — 桌面客户端（Tauri 2）**
-1. `pnpm create tauri-app` 初始化 `shell/`；窗口加载网关 URL（不做本地静态资源打包）。
+1. `pnpm create tauri-app` 初始化 `app/`；窗口加载网关 URL（不做本地静态资源打包）。
 2. 定位是**体验项**（独立窗口/托盘/自启），非技术必需——反代头改写全在服务端，认证走 webview cookie。
 3. 启动页只配服务器地址（store 插件持久化）；**不引 keyring/stronghold**（token 由 webview cookie 持久化）。
 4. 桌面体验：系统托盘、开机自启、单实例、`tauri-plugin-updater`。
@@ -104,7 +104,7 @@ dsh-app/
 - 不可行或体验差 → Phase 3 降级为 PWA + **网关注入方案**（网关代理 HTML 时改写 `<head>` 插入移动补丁 CSS；此路百分百可行且桌面移动通吃，即使 spike 通过也值得作为补丁分发的主渠道）。
 
 **Phase 3 — 移动客户端（Tauri Mobile，视 spike 结果）**
-1. 同一 `shell/` 工程开 iOS/Android target；布局补丁优先走网关注入，壳内注入仅作补充。
+1. 同一 `app/` 工程开 iOS/Android target；布局补丁优先走网关注入，壳内注入仅作补充。
 2. Android 先出 APK 实测；iOS 需开发者证书，排后。
 3. 验收：Android 真机完成一次完整会话。
 
