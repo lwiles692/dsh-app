@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dsh — 连接服务器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1>dsh 桌面壳</h1>
+      <p class="hint">
+        输入网关入口地址（形态 C 默认为
+        <code>https://localhost:8443</code>）。保存后壳将直接加载该地址；
+        登录在网关页面内完成，token 以 HttpOnly cookie 持久化，壳不保存 token。
+      </p>
+      <form id="form">
+        <label for="server-url">服务器地址</label>
+        <input
+          id="server-url"
+          type="text"
+          placeholder="https://localhost:8443"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <button type="submit">保存并连接</button>
+      </form>
+      <p id="status" class="status" role="status"></p>
+    </main>
+    <script src="main.js"></script>
+  </body>
+</html>
