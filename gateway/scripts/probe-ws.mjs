@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 const GATEWAY = process.env.GATEWAY ?? 'http://127.0.0.1:3000'
 const UPSTREAM = process.env.UPSTREAM ?? 'http://127.0.0.1:3080'
+const COOKIE = process.env.COOKIE // issue 04：带认证 cookie 经网关验证（如 COOKIE='dsh_auth=...'）
 const wsOf = (base, path) => `${base.replace(/^http/, 'ws')}${path}`
 
 let failures = 0
@@ -21,7 +22,7 @@ const ts = () => new Date().toISOString().slice(11, 19)
 // 经网关发一元 RPC（envelope 与上游一致）
 const post = (base, method, payload, rpcId) => fetch(`${base}/api/${method}`, {
   method: 'POST',
-  headers: { 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json', ...(COOKIE ? { cookie: COOKIE } : {}) },
   body: JSON.stringify({ type: 'client-request', rpcId, method, payload }),
 }).then(r => r.json())
 
@@ -39,7 +40,10 @@ async function triggerEvents (base, wsDir, tag) {
 }
 
 const connectMux = (base, { headers, onFrame } = {}) => new Promise((resolve, reject) => {
-  const ws = new WebSocket(wsOf(base, '/api/events.mux'), { headers, perMessageDeflate: false })
+  const ws = new WebSocket(wsOf(base, '/api/events.mux'), {
+    headers: { ...(COOKIE ? { cookie: COOKIE } : {}), ...headers },
+    perMessageDeflate: false,
+  })
   const timer = setTimeout(() => { ws.terminate(); reject(new Error('open 超时')) }, 5000)
   ws.on('open', () => { clearTimeout(timer); resolve(ws) })
   ws.on('error', (e) => { clearTimeout(timer); reject(e) })
@@ -139,7 +143,10 @@ async function cmdReconnect () {
   const connect = () => new Promise((resolve) => {
     const checker = frameChecker()
     let opened = false
-    const ws = new WebSocket(wsOf(GATEWAY, '/api/events.mux'), { perMessageDeflate: false })
+    const ws = new WebSocket(wsOf(GATEWAY, '/api/events.mux'), {
+      headers: COOKIE ? { cookie: COOKIE } : undefined,
+      perMessageDeflate: false,
+    })
     ws.on('message', checker.onFrame)
     ws.on('open', async () => {
       opened = true
