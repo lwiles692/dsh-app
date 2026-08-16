@@ -103,18 +103,22 @@ pnpm exec tauri ios build         # 需 Xcode + Apple 开发者证书/签名
 
 ## CI 出包（issue 09）
 
-`.github/workflows/shell-release.yml`：矩阵构建三平台安装包，产物上传 workflow
-artifacts；tag `v*` 构建同时附到 draft release（`contents: write`，人工核对后发布）。
+`.github/workflows/apps-release.yml`：矩阵构建三平台安装包 + Android APK，产物上传
+workflow artifacts；tag `v*` 构建同时附到 draft release（`contents: write`，人工核对
+后发布）。
 
 | 平台 | runner | 产物 |
 | --- | --- | --- |
 | macOS | `macos-latest` | universal dmg（aarch64 + x86_64） |
 | Linux | `ubuntu-22.04` | AppImage + deb |
 | Windows | `windows-latest` | msi（x64） |
+| Android | `ubuntu-22.04` | arm64-v8a debug APK（JDK 17 + SDK/NDK 组件同「构建 debug APK」节） |
+
+iOS 不在 CI 内：`gen/apple/` 未生成且 `tauri ios init` 需 macOS + XcodeGen（见上）。
 
 签名当前为占位（未签名构建）：真实密钥就绪后在 workflow 对应平台 job 注入签名
 环境变量（注释中标了占位位置），并开启 `createUpdaterArtifacts` 产出 updater
-签名产物（见下）。
+签名产物（见下）；Android 同理切 release 出包 + keystore（workflow 内注释有步骤）。
 
 ## 自动更新占位（issue 09）
 
