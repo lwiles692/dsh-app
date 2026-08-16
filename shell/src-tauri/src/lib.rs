@@ -10,6 +10,8 @@ use tauri::{
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_store::StoreExt;
 
+mod updater;
+
 const STORE_PATH: &str = "settings.json";
 const SERVER_URL_KEY: &str = "server_url";
 const CLOSE_TO_TRAY_KEY: &str = "close_to_tray";
@@ -109,12 +111,21 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        // dialog：更新确认/提示用系统对话框（主窗口是远程页，不能走 webview 内 UI）；
+        // updater：自动更新插件，检查逻辑见 src/updater.rs（Rust 侧触发，不依赖 JS API）。
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![get_server_url, set_server_url])
         .setup(|app| {
-            // 原生菜单提供「更改服务器地址」入口：回到本地配置页后可改指向另一实例。
+            // 原生菜单：「更改服务器地址」回配置页可改指向另一实例；
+            // 「检查更新」在本地上下文触发 updater（远程网关页无 IPC，见 updater.rs）。
             let change_server =
                 MenuItemBuilder::with_id("change-server", "更改服务器地址").build(app)?;
-            let menu = MenuBuilder::new(app).item(&change_server).build()?;
+            let check_update = MenuItemBuilder::with_id("check-update", "检查更新…").build(app)?;
+            let menu = MenuBuilder::new(app)
+                .item(&change_server)
+                .item(&check_update)
+                .build()?;
             app.set_menu(menu)?;
 
             // 首次启动默认开启开机自启；写入标记，之后不覆盖用户在托盘的勾选。
@@ -135,8 +146,16 @@ pub fn run() {
                     .checked(close_to_tray_enabled(app.handle()))
                     .build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "退出").build(app)?;
+            let tray_check_update =
+                MenuItemBuilder::with_id("tray-check-update", "检查更新…").build(app)?;
             let tray_menu = MenuBuilder::new(app)
-                .items(&[&toggle, &autostart_item, &close_to_tray_item, &quit])
+                .items(&[
+                    &toggle,
+                    &autostart_item,
+                    &close_to_tray_item,
+                    &tray_check_update,
+                    &quit,
+                ])
                 .build()?;
             let mut tray = TrayIconBuilder::with_id("tray")
                 .menu(&tray_menu)
@@ -157,6 +176,7 @@ pub fn run() {
                             let _ = store.save();
                         }
                     }
+                    "tray-check-update" => updater::check_for_updates(app.clone(), true),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -188,16 +208,22 @@ pub fn run() {
                 None => WebviewUrl::App("index.html".into()),
             };
             open_main_window(app.handle(), url)?;
+
+            // 启动时静默检查更新：占位 endpoint 下只会得到一次失败的 HTTP 请求
+            //（打日志），不影响启动；发现新版本才弹确认框（见 updater.rs）。
+            updater::check_for_updates(app.handle().clone(), false);
             Ok(())
         })
-        .on_menu_event(|app, event| {
-            if event.id() == "change-server" {
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "change-server" => {
                 if let Some(window) = app.get_webview_window("main") {
                     // destroy 绕过关窗驻留拦截（CloseRequested），直接销毁重建。
                     let _ = window.destroy();
                 }
                 let _ = open_main_window(app, WebviewUrl::App("index.html".into()));
             }
+            "check-update" => updater::check_for_updates(app.clone(), true),
+            _ => {}
         })
         .on_window_event(|window, event| {
             // 关窗不退进程（默认开）：拦截关闭改为隐藏，进程驻留托盘；托盘「退出」才退出。

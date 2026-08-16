@@ -1,0 +1,110 @@
+# dsh-shell 桌面出包（issue 09）
+#
+# 矩阵构建三平台安装包：
+#   - macOS  : universal dmg（aarch64 + x86_64 单个产物）
+#   - Linux  : AppImage + deb（ubuntu-22.04，glibc 兼容面更广）
+#   - Windows: msi（x64）
+#
+# 触发：push tag v*（产物附到 draft release）；workflow_dispatch 手动出包（产物上传
+# workflow artifacts，不建 release）。
+#
+# 签名占位：本仓库暂无真实签名密钥，产物当前为未签名构建（macOS 未公证 / Windows
+# 未签名 msi / Linux 无签名要求）。真实密钥就绪后在 macOS/Windows job 注入签名
+# 环境变量（见下方「签名占位」注释），并开启 tauri.conf.json 的 updater 产物
+#（createUpdaterArtifacts，见 shell/README.md「自动更新」）。
+
+name: shell-release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # tag 构建时创建 draft release 并上传产物
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            # universal：单个 dmg 同时覆盖 Apple Silicon 与 Intel
+            args: --target universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - os: ubuntu-22.04
+            args: --bundles appimage,deb
+            rust-targets: ''
+          - os: windows-latest
+            args: --bundles msi
+            rust-targets: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: shell/pnpm-lock.yaml
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: shell/src-tauri
+
+      # Tauri 2 官方 Linux 依赖（WebKitGTK 4.1 + 托盘 appindicator + librsvg）
+      - name: Install Linux build deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+        working-directory: shell
+
+      # 签名占位：无真实密钥，当前产出未签名构建。启用签名时在对应平台解注释并
+      # 配置 repo secrets（变量名即 Tauri 官方约定，见 tauri.app 签名文档）：
+      #   macOS  : APPLE_CERTIFICATE / APPLE_CERTIFICATE_PASSWORD / APPLE_SIGNING_IDENTITY
+      #            （公证另需 APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID）
+      #   Windows: WINDOWS_CERTIFICATE / WINDOWS_CERTIFICATE_PASSWORD（无则跳过签名）
+      - name: Build bundles
+        run: pnpm exec tauri build ${{ matrix.args }}
+        working-directory: shell
+
+      # host 构建产物在 target/release/bundle，--target 交叉/通用构建在
+      # target/<target>/release/bundle，统一用 ** 覆盖两种路径。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsh-shell-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            shell/src-tauri/target/**/bundle/**/*.AppImage
+            shell/src-tauri/target/**/bundle/**/*.deb
+            shell/src-tauri/target/**/bundle/**/*.dmg
+            shell/src-tauri/target/**/bundle/**/*.msi
+
+      # 仅 tag 构建：产物附到 draft release，人工核对后发布
+      - name: Attach bundles to draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            shell/src-tauri/target/**/bundle/**/*.AppImage
+            shell/src-tauri/target/**/bundle/**/*.deb
+            shell/src-tauri/target/**/bundle/**/*.dmg
+            shell/src-tauri/target/**/bundle/**/*.msi

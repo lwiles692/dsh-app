@@ -17,6 +17,10 @@ tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-store = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+# updater：自动更新（检查/下载/安装全在 Rust 侧触发，IPC 不暴露给远程网关页）；
+# dialog：更新确认/提示用原生对话框（主窗口是远程页，不能走 webview 内 UI）。
+tauri-plugin-updater = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 url = "2"
