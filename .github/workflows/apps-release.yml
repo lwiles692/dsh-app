@@ -6,7 +6,7 @@
 #   - Windows: msi（x64）
 #   - Android: arm64-v8a debug APK（JDK 17 + Android SDK/NDK，见 build-android job；
 #              iOS 不在此列——gen/apple 未生成且 init 需 macOS + XcodeGen，
-#              见 app/README.md「iOS」节）
+#              见 README「iOS」节）
 #
 # 触发：push tag v*（产物附到 draft release）；workflow_dispatch 手动出包（产物上传
 # workflow artifacts，不建 release）。
@@ -15,7 +15,7 @@
 # 未签名 msi / Linux 无签名要求 / Android 用 debug 签名）。真实密钥就绪后在
 # macOS/Windows job 注入签名环境变量（见下方「签名占位」注释），Android 切 release
 # 出包并配 keystore（见 build-android 的「签名占位」注释），并开启 tauri.conf.json
-# 的 updater 产物（createUpdaterArtifacts，见 app/README.md「自动更新」）。
+# 的 updater 产物（createUpdaterArtifacts，见 README「自动更新占位」）。
 
 name: apps-release
 
@@ -114,7 +114,7 @@ jobs:
             app/src-tauri/target/**/bundle/**/*.msi
 
   # Android APK（issue 12）：gen/android 工程入库（含 MainActivity 补丁），交叉编译
-  # aarch64 Rust + gradle 打包。SDK 组件版本与 app/README.md「构建 debug APK」一致。
+  # aarch64 Rust + gradle 打包。SDK 组件版本与 README「构建 debug APK」一致。
   build-android:
     runs-on: ubuntu-22.04
     steps:

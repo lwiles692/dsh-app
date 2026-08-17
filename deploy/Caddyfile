@@ -3,7 +3,7 @@
 #   https://localhost:8443  --reverse_proxy-->  127.0.0.1:3000（网关）
 #
 # - `localhost` 走 Caddy 本地 CA（tls internal）签发证书，无需公网域名。
-#   浏览器首次使用须信任 Caddy 根证书（路径见 RUNBOOK「浏览器信任」）。
+#   浏览器首次使用须信任 Caddy 根证书（路径见 README「浏览器信任」）。
 # - 端口 8443 而非 443：本机非 root 运行时无特权端口绑定权
 #   （net.ipv4.ip_unprivileged_port_start=1024）。若以 root 或
 #   CAP_NET_BIND_SERVICE 运行，把站点地址改回 `https://localhost` 即用 443。

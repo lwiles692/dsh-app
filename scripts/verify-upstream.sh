@@ -12,10 +12,10 @@
 #   - RPC 单段点号路径 POST /api/<method>，envelope {type:'client-request',rpcId,method,payload}
 #   - 业务错误恒 200 + {ok:false,error:{code,message}}；carrier 层 404/415/400
 #   - WS 下行文本帧（每帧一个完整 JSON server-request）；客户端发帧 → close(1008)
-#   - SSE：web 传输面 GET /api/events.{mux,host} 返回 426（SSE 仅存在于 apiproxy
-#     fetch handler，web 面强制 WebSocket —— 与调研预期不同，以实测为准）
+#   - SSE：web 传输面 GET /api/events.{mux,host} 返回 426（web 面强制 WebSocket，
+#     SSE 仅存在于 apiproxy fetch handler）
 #   - 信任栅栏：Host 回环 / Origin 一致性 / Sec-Fetch-Site / 非 JSON POST 415
-#   - PRIVILEGED_METHODS 清单（实际 15 个，调研文档写 17 个 —— 以源码为准）
+#   - PRIVILEGED_METHODS 清单（15 个，源码固化）
 #
 # 用法：scripts/verify-upstream.sh    （需 vendor/deepseek-harness 已 pnpm install && pnpm run build）
 set -u
@@ -186,7 +186,7 @@ process.exit(process.exitCode ?? 0)
 EOF
 [ $? -eq 0 ] || FAIL=$((FAIL+1))
 
-# --- PRIVILEGED_METHODS 清单（源码固化，实际 15 个） --------------------------
+# --- PRIVILEGED_METHODS 清单（源码固化，15 个） -------------------------------
 VENDOR="$VENDOR" node --input-type=module <<'EOF'
 import { readFileSync } from 'node:fs'
 const src = readFileSync(`${process.env.VENDOR}/packages/client/connection/src/index.ts`, 'utf8')

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  dsh 网关注常进程（launchd 参考实现，macOS；形态 B 的网关与 Host 同机）
+  dsh 网关常驻进程（launchd 参考实现，macOS；形态 B 的网关与 Host 同机）
 
   安装（用户级）：
     cp com.dsh-app.dsh-gateway.plist ~/Library/LaunchAgents/

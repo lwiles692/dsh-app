@@ -4,7 +4,7 @@
 #   sudo cp dsh-host.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now dsh-host
 #
-# 前提：仓库部署在 /opt/dsh-app（ WorkingDirectory 按实际路径修改），
+# 前提：仓库部署在 /opt/dsh-app（WorkingDirectory 按实际路径修改），
 # vendor/deepseek-harness 已构建（pnpm install && pnpm run build）。
 # 形态 A 中本单元跑在开发机；形态 B/C 中与其他单元同机。
 [Unit]

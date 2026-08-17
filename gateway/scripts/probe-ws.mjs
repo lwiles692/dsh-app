@@ -1,4 +1,4 @@
-// probe-ws.mjs — issue 03 验收探针：经网关的事件流 WS 透传验证。
+// probe-ws.mjs — 经网关的事件流 WS 透传验收探针。
 // 用法（在 gateway/ 目录下，依赖网关已起、上游 dsh web 已起）：
 //   node scripts/probe-ws.mjs stream            # 经网关开 mux downlink，触发 workspace+session 事件，逐帧校验
 //   node scripts/probe-ws.mjs fence             # WS upgrade 栅栏：直连上游 evil 头被拒 / 经网关被改写放行
@@ -11,7 +11,7 @@ import { join } from 'node:path'
 
 const GATEWAY = process.env.GATEWAY ?? 'http://127.0.0.1:3000'
 const UPSTREAM = process.env.UPSTREAM ?? 'http://127.0.0.1:3080'
-const COOKIE = process.env.COOKIE // issue 04：带认证 cookie 经网关验证（如 COOKIE='dsh_auth=...'）
+const COOKIE = process.env.COOKIE // 认证 cookie（如 COOKIE='dsh_auth=...'）
 const wsOf = (base, path) => `${base.replace(/^http/, 'ws')}${path}`
 
 let failures = 0
@@ -27,7 +27,7 @@ const post = (base, method, payload, rpcId) => fetch(`${base}/api/${method}`, {
 }).then(r => r.json())
 
 // 触发一组 mux 事件：workspace.create -> session.create（收尾 workspace.delete）。
-// 返回清理函数；wsDir 由调用方持有以便复删。
+// 返回清理函数。
 async function triggerEvents (base, wsDir, tag) {
   const w = await post(base, 'workspace.create', { path: wsDir, name: `probe-${tag}` }, `${tag}-wc`)
   if (!w.result?.ok) throw new Error(`workspace.create 失败: ${JSON.stringify(w.result?.error)}`)
@@ -87,7 +87,7 @@ async function cmdStream () {
 }
 
 async function cmdFence () {
-  // 直连上游带 evil Host/Origin -> 应被栅栏拒绝（01 已验证，此处对照）
+  // 直连上游带 evil Host/Origin -> 应被栅栏拒绝（对照组）
   try {
     await connectMux(UPSTREAM, { headers: { Host: 'evil.com', Origin: 'http://evil.com' } })
     fail('直连上游 evil Host/Origin 的 upgrade 竟被接受')

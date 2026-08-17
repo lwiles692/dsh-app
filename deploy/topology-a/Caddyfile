@@ -1,4 +1,4 @@
-# 形态 A（公网 VPS 入口）入口：Caddy -> 网关 -> 隧道 -> 开发机 dsh Host
+# 形态 A（公网 VPS）入口：Caddy -> 网关 -> 隧道 -> 开发机 dsh Host
 #
 #   https://dsh.example.com  --reverse_proxy-->  127.0.0.1:3000（网关，同在 VPS）
 #

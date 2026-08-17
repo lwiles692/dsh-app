@@ -1,12 +1,9 @@
-//! 自动更新（issue 09）。检查/确认/下载/安装全部在 Rust 侧完成：
-//! 主窗口加载的是远程网关页，IPC 不暴露给远程页面（issue 07 架构约定），
-//! 因此不走 webview 内 JS updater API，而由原生菜单/托盘菜单/启动时静默检查触发，
-//! 用户提示用系统对话框（tauri-plugin-dialog）。
+//! 自动更新。检查/确认/下载/安装全部在 Rust 侧完成：主窗口加载的是远程网关页，
+//! IPC 不暴露给远程页面，因此不走 webview 内 JS updater API，而由原生菜单/
+//! 托盘菜单/启动时静默检查触发，用户提示用系统对话框（tauri-plugin-dialog）。
 //!
-//! endpoints 与签名公钥目前为占位配置（见 tauri.conf.json `plugins.updater`
-//! 与 README「自动更新」一节）：占位 endpoint 查不到版本源，静默检查只会
-//! 得到失败并打到 stderr，不影响启动与使用；真实签名密钥与发布域名就绪后
-//! 更换配置即可启用。
+//! endpoints 与签名公钥目前为占位配置（见 tauri.conf.json `plugins.updater`）：
+//! 占位 endpoint 查不到版本源，静默检查只会得到失败并打到 stderr，不影响启动。
 
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -38,7 +35,6 @@ async fn run_update_check(app: &AppHandle, interactive: bool) -> Result<(), Stri
         return Ok(());
     };
 
-    // 主窗口是远程网关页，确认框走系统对话框而非 webview 内 UI。
     let proceed = app
         .dialog()
         .message(format!(

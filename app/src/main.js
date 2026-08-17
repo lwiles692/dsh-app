@@ -1,5 +1,5 @@
 // 启动配置页逻辑（零构建、无框架；经 withGlobalTauri 暴露的全局 API 调 Rust command）。
-// 仅本地页面可用 IPC；保存成功后窗口导航到网关 URL，IPC 随之不可用（按设计）。
+// 仅本地页面可用 IPC；保存成功后窗口导航到网关 URL，IPC 随之不可用。
 
 const DEFAULT_SERVER_URL = "https://localhost:8443";
 
@@ -26,7 +26,6 @@ async function init() {
     status.textContent = "正在保存并连接…";
     try {
       await invoke("set_server_url", { url: input.value });
-      // 成功后窗口已导航到网关 URL，本页随之卸载。
     } catch (err) {
       status.textContent = `保存失败：${err}`;
     }

@@ -12,8 +12,8 @@
 #      客户端要信任 Caddy 根证书（同形态 C「浏览器信任」步骤）。
 # - 网关与 dsh Host 只绑 127.0.0.1；仅 Caddy 监听局域网地址。443 需 root 或
 #   CAP_NET_BIND_SERVICE；非 root 运行时把站点地址改为
-#   `dsh.home.example.com:8443`（此时 HTTP->HTTPS 跳转会绑 80 失败，需加
-#   全局 `auto_https disable_redirects`，参考 deploy/Caddyfile 形态 C）。
+#   `dsh.home.example.com:8443`（此时 HTTP->HTTPS 跳转要绑 80、会失败，需加
+#   全局 `auto_https disable_redirects`，参考形态 C 的 deploy/Caddyfile）。
 # - WebSocket（/api/events.mux、/api/events.host）：reverse_proxy 自动透传。
 {
 	# 部署面不需要 admin API

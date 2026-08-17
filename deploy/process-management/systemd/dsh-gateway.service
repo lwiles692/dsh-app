@@ -1,4 +1,4 @@
-# dsh 网关注常进程（systemd 系统单元参考实现，三种形态通用）
+# dsh 网关常驻进程（systemd 系统单元参考实现，三种形态通用）
 #
 # 安装：
 #   sudo install -m 0600 /dev/null /etc/dsh/gateway.env
@@ -7,7 +7,7 @@
 #   sudo systemctl daemon-reload && sudo systemctl enable --now dsh-gateway
 #
 # 形态差异全部走 /etc/dsh/gateway.env（UPSTREAM/HOST/PORT/AUTH_TOKEN/
-# AUTH_COOKIE_SECURE），单元本身不改；网关环境变量语义见 deploy/RUNBOOK.md。
+# AUTH_COOKIE_SECURE），单元本身不改；网关环境变量语义见 README 形态 C「网关」小节。
 [Unit]
 Description=dsh gateway (auth + reverse proxy for dsh Host)
 After=network-online.target

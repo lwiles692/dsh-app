@@ -1,8 +1,7 @@
 // 全局 Tauri API（withGlobalTauri）在远程网关页面不可用 —— IPC 只对本地配置页开放，
 // 壳内 SPA 走标准 fetch/WebSocket + HttpOnly cookie，与浏览器形态完全一致。
-//
-// 平台门控（issue 12）：托盘/菜单/单实例/自启/更新为桌面专属（依赖在 Cargo.toml
-// 按 target 门控），移动端只保留：启动配置页 + 网关加载 + store 持久化 + dialog。
+// 托盘/菜单/单实例/自启/更新为桌面专属（按 target 门控），移动端只保留
+// 启动配置页 + 网关加载 + store 持久化 + dialog。
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -33,7 +32,7 @@ fn get_server_url(app: AppHandle) -> Option<String> {
 }
 
 /// 保存服务器地址并把主窗口导航到网关 URL。
-/// token 不经壳保存：登录页在 webview 内种 HttpOnly cookie（见 issue 04/07）。
+/// token 不经壳保存：登录页在 webview 内种 HttpOnly cookie。
 #[tauri::command]
 fn set_server_url(app: AppHandle, url: String) -> Result<(), String> {
     let parsed = validate_server_url(&url)?;
@@ -46,7 +45,7 @@ fn set_server_url(app: AppHandle, url: String) -> Result<(), String> {
     window.navigate(parsed).map_err(|e| e.to_string())
 }
 
-/// 仅允许 https；http 只放行回环地址（对应 RUNBOOK 的 HTTP 回环显式降配形态）。
+/// 仅允许 https；http 只放行回环地址（对应 README 的 HTTP 回环显式降配形态）。
 fn validate_server_url(input: &str) -> Result<url::Url, String> {
     let parsed = url::Url::parse(input.trim())
         .map_err(|_| "地址无法解析，请输入完整 URL（含协议）".to_string())?;
@@ -78,7 +77,7 @@ fn close_to_tray_enabled(app: &AppHandle) -> bool {
     close_to_tray_from(value.as_ref())
 }
 
-/// 显示/隐藏主窗口（托盘左键与托盘菜单共用）。桌面专属：移动端无托盘。
+/// 显示/隐藏主窗口（托盘左键与托盘菜单共用）。
 #[cfg(desktop)]
 fn toggle_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -114,9 +113,9 @@ fn open_main_window(app: &AppHandle, url: WebviewUrl) -> tauri::Result<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
-    // 桌面专属插件（issue 12 门控）：single-instance 必须最先注册——第二个进程
-    // 在此即退出，回调聚焦已有窗口；autostart 开机自启；updater 自动更新
-    //（检查逻辑见 src/updater.rs，Rust 侧触发，不依赖 JS API）。
+    // 桌面专属插件：single-instance 必须最先注册——第二个进程在此即退出，
+    // 回调聚焦已有窗口；autostart 开机自启；updater 自动更新（Rust 侧触发，
+    // 见 src/updater.rs）。
     #[cfg(desktop)]
     {
         builder = builder
@@ -140,8 +139,7 @@ pub fn run() {
                 _ => {}
             })
             .on_window_event(|window, event| {
-                // 关窗不退进程（默认开）：拦截关闭改为隐藏，进程驻留托盘；
-                // 托盘「退出」才退出。移动端系统直接管理 Activity 生命周期。
+                // 关窗不退进程：拦截关闭改为隐藏，进程驻留托盘，托盘「退出」才退出。
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     if close_to_tray_enabled(&window.app_handle()) {
                         api.prevent_close();
@@ -152,18 +150,15 @@ pub fn run() {
     }
     builder
         .plugin(tauri_plugin_store::Builder::default().build())
-        // dialog：更新确认/提示用系统对话框（主窗口是远程页，不能走 webview 内
-        // UI）；移动端 partial 支持（无文件夹选择器），本壳只用消息框，全平台可用。
+        // dialog：主窗口是远程页，更新确认/提示须用系统对话框而非 webview 内 UI。
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![get_server_url, set_server_url])
         .setup(|app| {
-            // 桌面专属 setup（issue 08 行为全量保留）：原生菜单、托盘、首次默认
-            // 开机自启。移动端无菜单/托盘概念，跳过。
+            // 桌面专属 setup：原生菜单、托盘、首次默认开机自启。
             #[cfg(desktop)]
             desktop_setup(app)?;
 
             // 已配置地址 → 窗口直接加载网关 URL；否则加载本地启动配置页。
-            // 移动端同样经配置页设置网关地址（本地页面为触屏可用）。
             let saved = app
                 .store(STORE_PATH)
                 .ok()
@@ -176,8 +171,7 @@ pub fn run() {
             };
             open_main_window(app.handle(), url)?;
 
-            // 启动时静默检查更新：占位 endpoint 下只会得到一次失败的 HTTP 请求
-            //（打日志），不影响启动；发现新版本才弹确认框（见 updater.rs）。
+            // 启动时静默检查更新：检查失败只打日志，发现新版本才弹确认框。
             #[cfg(desktop)]
             updater::check_for_updates(app.handle().clone(), false);
             Ok(())
@@ -187,7 +181,7 @@ pub fn run() {
 }
 
 /// 桌面专属 setup：原生菜单「更改服务器地址」「检查更新」、系统托盘、
-/// 首次启动默认开启开机自启（issue 08 的完整行为，移动端不编入）。
+/// 首次启动默认开启开机自启。
 #[cfg(desktop)]
 fn desktop_setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let change_server =
