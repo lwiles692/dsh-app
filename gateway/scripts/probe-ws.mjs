@@ -118,7 +118,7 @@ async function cmdIdle (seconds = 180) {
   ws.on('close', (code, reason) => { closedEarly = { code, reason: reason.toString() } })
   await sleep(seconds * 1000)
   if (closedEarly) {
-    fail(`空闲 ${seconds}s 内连接被掐断: code=${closedEarly.code} reason=${closedEarly.reason}`)
+    fail(`空闲 ${seconds}s 内连接被中断: code=${closedEarly.code} reason=${closedEarly.reason}`)
   } else if (ws.readyState !== WebSocket.OPEN) {
     fail(`空闲 ${seconds}s 后 readyState=${ws.readyState}（非 OPEN）`)
   } else {

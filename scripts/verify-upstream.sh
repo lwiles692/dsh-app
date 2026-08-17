@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify-upstream.sh — dsh 上游协议/栅栏行为回归验证（升级上游版本后必跑）。
+# verify-upstream.sh — dsh 上游协议/栅栏行为回归验证（升级上游版本后必须运行）。
 #
 # Pin（部署脚本与 vendor/ 必须与此一致）：
 #   repo    https://github.com/deepseek-ai/deepseek-harness.git

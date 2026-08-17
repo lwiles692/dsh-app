@@ -12,7 +12,7 @@ const MOBILE_PATCH_CSS = `
 /* dsh 移动布局补丁。仅窄屏命中。 */
 @media (max-width: 768px) {
   /* 安全区变量回退：env(safe-area-inset-*) 在 Android WebView < 140.0.7339.51
-     恒 0（tauri#14240），max() 让壳侧原生桥写入的 --dsh-safe-* 变量兜底。 */
+     恒 0（tauri#14240），max() 让壳侧原生桥写入的 --dsh-safe-* 变量作为回退。 */
   :root {
     --dsh-safe-top: 0px;
     --dsh-safe-right: 0px;

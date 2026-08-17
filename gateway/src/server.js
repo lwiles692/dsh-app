@@ -45,7 +45,7 @@ const BODY_TOO_LARGE_MARK = 'DSH_GATEWAY_BODY_TOO_LARGE'
 const app = Fastify({
   logger: true,
   bodyLimit: BODY_LIMIT,
-  // WS downlink 长连接空闲挂起：默认 300s 请求超时会掐断，置 0 关闭。
+  // WS downlink 长连接空闲挂起：默认 300s 请求超时会中断连接，置 0 关闭。
   connectionTimeout: 0,
   requestTimeout: 0,
 })
