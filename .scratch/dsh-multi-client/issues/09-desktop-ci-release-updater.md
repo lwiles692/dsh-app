@@ -18,7 +18,7 @@
 
 - **CI workflow**（`.github/workflows/shell-release.yml`）：
   - 矩阵三平台：macOS `macos-latest`（`--target universal-apple-darwin`，单个 dmg 覆盖 Apple Silicon + Intel，rust-toolchain 加装双 target）/ Linux `ubuntu-22.04`（`--bundles appimage,deb`，按 Tauri 2 官方依赖清单安装 WebKitGTK 4.1 + libayatana-appindicator3 + librsvg 等）/ Windows `windows-latest`（`--bundles msi`）。
-  - 触发：push tag `v*` 与 `workflow_dispatch`。产物先 `upload-artifact`（`if-no-files-found: error` 防止产物缺失）；tag 构建再经 `softprops/action-gh-release@v2` 附到 **draft release**（`permissions: contents: write`），人工核对后发布。
+  - 触发：push tag `v*` 与 `workflow_dispatch`。产物先 `upload-artifact`（`if-no-files-found: error` 防止产物缺失）；tag 构建再经 `softprops/action-gh-release@v3` 附到 **draft release**（`permissions: contents: write`），人工核对后发布。
   - 产物路径用 `target/**/bundle/**` 通配同时覆盖 host 构建（`target/release/bundle`）与带 `--target` 构建（`target/<target>/release/bundle`）。
   - 签名占位：当前产出未签名构建（macOS 未公证 / Windows msi 未签名 / Linux 无签名要求）；workflow 内注释标明真实密钥就绪后的注入位置（macOS `APPLE_CERTIFICATE` 等、Windows `WINDOWS_CERTIFICATE` 等）。
 - **updater 接入**（架构遵循 07 约定：主窗口加载远程网关页，IPC 不暴露给远程页面）：
@@ -44,3 +44,7 @@
 - 首次真实出包需：仓库配 remote → push tag `v*` → 核对 draft release 三平台产物。
 - 签名与 updater 产物启用清单（README「自动更新占位」已完整记录）：生成 minisign 密钥对、私钥放入 CI secrets、公钥替换占位、Windows 切 NSIS、`createUpdaterArtifacts: true`、endpoints 替换为真实更新源（静态 JSON 或 latest-release 接口）。
 - CI 出包的正式图标仍用 issue 07 的纯色占位 PNG（dmg/msi 会内嵌该图标）。
+
+### 首次 tag 出包修复（2026-08-17）
+
+首个 tag `v0.1.0`（run 32026274902）macOS/Linux/Android 全过，Windows msi 失败：tauri-build 生成 Windows Resource 文件时找不到 `.ico`（配置 icon 列表全 PNG，回退路径 `icons/icon.ico` 也不存在，tauri-build 2.6.3 `lib.rs` 的 window_icon_path 解析逻辑）。修复：`pnpm exec tauri icon` 由占位 `icon.png` 再生成全套图标（新增 `icon.ico`/`icon.icns`/`64x64.png`/Store 徽标，gen/android mipmap 同步再生成并新增 adaptive icon 资源），`tauri.conf.json` icon 列表补入 `.ico`/`.icns`。同次将 workflow 内 7 个 Node 20 目标的 action 升至 Node 24 大版本（checkout v7 / setup-node v7 / setup-java v5 / upload-artifact v7 / pnpm-action-setup v6（需 pnpm 11 支持）/ setup-android v4 / gh-release v3），消除全部 5 条弃用警告。待下次 tag 出包验证 msi。
